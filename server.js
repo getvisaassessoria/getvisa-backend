@@ -443,7 +443,7 @@ app.post('/api/submit-ds160', async (req, res) => {
       to: ['getvisa.assessoria@gmail.com'],
       subject: `🇺🇸 DS-160: ${nome}`,
       html: `<strong>Formulário DS-160 recebido.</strong><br><p><strong>Cliente:</strong> ${nome}</p><p>PDF em anexo.</p>`,
-      attachments: [{ filename: `DS160_${nome.replace(/[^a-z0-9]/gi, '_')}.pdf`, content: pdfBuffer }]
+      attachments: [{ filename: `DS160_${nome.replace(/[^a-z0-9]/gi, '_')}.pdf`, content: pdfBuffer.toString('base64') }]
     });
     console.log('✅ E-mail enviado para a equipe');
 
