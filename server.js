@@ -74,12 +74,17 @@ app.post('/api/submit-ds160', async (req, res) => {
     const emailCliente = data['email-1'] || null;
     const telefone = data['text-77'] || '';
 
-    // Geração do PDF (simples, mas funcional)
-    const pdfBuffer = await new Promise((resolve) => {
+    // Geração do PDF com verificação de tamanho
+    const pdfBuffer = await new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50 });
       const buffers = [];
       doc.on('data', buffers.push.bind(buffers));
-      doc.on('end', () => resolve(Buffer.concat(buffers)));
+      doc.on('end', () => {
+        const pdf = Buffer.concat(buffers);
+        if (pdf.length === 0) reject(new Error('PDF gerado está vazio'));
+        else resolve(pdf);
+      });
+      doc.on('error', reject);
 
       doc.fontSize(22).text('SOLICITAÇÃO DE VISTO DS-160', { align: 'center' });
       doc.moveDown();
@@ -89,29 +94,32 @@ app.post('/api/submit-ds160', async (req, res) => {
       doc.end();
     });
 
-    // E-mail para equipe
-    await resend.emails.send({
+    console.log(`✅ PDF gerado, tamanho: ${pdfBuffer.length} bytes`);
+
+    // Envia e‑mail para a equipe com anexo
+    const emailEquipe = await resend.emails.send({
       from: 'GetVisa <contato@getvisa.com.br>',
       to: ['getvisa.assessoria@gmail.com'],
       subject: `🇺🇸 DS-160: ${nome}`,
-      html: `<p><strong>Cliente:</strong> ${nome}<br><strong>E-mail:</strong> ${emailCliente}</p><p>PDF em anexo.</p>`,
+      html: `<p><strong>Cliente:</strong> ${nome}<br><strong>E-mail:</strong> ${emailCliente}</p><p>PDF em anexo (${pdfBuffer.length} bytes).</p>`,
       attachments: [{ filename: `DS160_${nome.replace(/[^a-z0-9]/gi, '_')}.pdf`, content: pdfBuffer }]
     });
-    console.log('✅ E-mail enviado para a equipe');
+    console.log('✅ E-mail enviado para a equipe', emailEquipe.id);
 
-    // E-mail para cliente (opcional)
+    // Envia para o cliente (opcional)
     if (emailCliente && emailCliente.trim() !== '') {
-      await resend.emails.send({
+      const emailClienteRes = await resend.emails.send({
         from: 'GetVisa <contato@getvisa.com.br>',
         to: [emailCliente],
         subject: `Seu formulário DS-160 foi recebido - ${nome}`,
-        html: `<p>Olá ${nome},<br>Recebemos seu formulário. Em breve entraremos em contato.</p><p>PDF em anexo.</p>`,
+        html: `<p>Olá ${nome},<br>Recebemos seu formulário. Segue em anexo uma cópia.</p>`,
         attachments: [{ filename: `DS160_${nome.replace(/[^a-z0-9]/gi, '_')}.pdf`, content: pdfBuffer }]
       });
-      console.log(`✅ E-mail enviado para o cliente: ${emailCliente}`);
+      console.log(`✅ E-mail enviado para o cliente: ${emailCliente}`, emailClienteRes.id);
     }
   } catch (err) {
-    console.error('❌ Erro no DS-160:', err);
+    console.error('❌ Erro no DS-160:', err.message);
+    // Não reenvia e‑mail para não duplicar
   }
 });
 
